@@ -18,6 +18,7 @@ const kioskRoutes = require('./routes/kioskRoutes');
 const displayRoutes = require('./routes/displayRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const aadhaarRoutes = require('./routes/aadhaarRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -49,6 +50,7 @@ app.use('/api/kiosk', kioskRoutes);
 app.use('/api/display', displayRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/aadhaar', aadhaarRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Any non-API route falls back to the frontend (so browser refreshes on client routes still work)
 app.get(/^(?!\/api).*/, (req, res) => {

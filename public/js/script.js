@@ -112,7 +112,7 @@
         };
 
         // Simulated tokens already booked for today's slots
-        const slotBookings = { morning: 48, afternoon: 32, evening: 20 };
+        // (per-slot booking counts now come live from centreCapacityData — see getSlotBookedCount)
 
         let queueData = [];
         let counterData = {};
@@ -144,6 +144,14 @@
             ];
         }
 
+        // Live count of tokens already booked for a slot — reads directly from the same
+        // centreCapacityData the admin's capacity settings modal edits, so this always
+        // reflects real bookings/admin changes instead of a separate, stale number.
+        function getSlotBookedCount(slotKey) {
+            const slot = centreCapacityData[slotKey];
+            return slot ? slot.online.booked + slot.kiosk.booked : 0;
+        }
+
         // ====== ETA Calculation ======
         // Position-based ETA for a specific counter: how long until THIS counter calls this farmer
         function calculateETAForToken(queuePosition) {
@@ -162,7 +170,7 @@
             const diffMs = targetDate - now;
             if (diffMs <= 0) {
                 // Slot already started or passed, use queue-based ETA
-                const booked = slotBookings[slotKey] || 0;
+                const booked = getSlotBookedCount(slotKey);
                 const remainingCapacity = slot.capacity - booked;
                 const etaMinutes = Math.ceil((booked * AVG_PROCESS_MIN) / ACTIVE_COUNTERS);
                 return etaMinutes + ' min';
@@ -174,35 +182,114 @@
             return hrs + 'h ' + mins + 'm';
         }
 
-        function getSlotEstimation(dateStr, slotKey) {
+        // Single source of truth for "how many minutes from now" a slot's queue will
+        // reach this booking — reused everywhere so every display agrees with the others.
+        function computeSlotWaitMinutes(dateStr, slotKey) {
             const slot = slotConfig[slotKey];
-            const booked = slotBookings[slotKey] || 0;
+            const booked = getSlotBookedCount(slotKey);
             const now = new Date();
-            const slotStart = new Date(dateStr + 'T' + String(slot.startH).padStart(2,'0') + ':00:00');
-            const slotEnd = new Date(dateStr + 'T' + String(slot.endH).padStart(2,'0') + ':00:00');
-
-            // If slot is today and already started
+            const slotStart = new Date(dateStr + 'T' + String(slot.startH).padStart(2, '0') + ':00:00');
             const isToday = dateStr === now.toISOString().split('T')[0];
+
             let waitFromQueueStart;
             if (isToday && now >= slotStart) {
-                // Calculate based on current queue position within this slot
-                waitFromQueueStart = Math.ceil((booked * AVG_PROCESS_MIN) / ACTIVE_COUNTERS);
-            } else if (isToday && now < slotStart) {
-                // Slot hasn't started yet - wait = time to slot start + queue processing
-                const minsToStart = Math.ceil((slotStart - now) / 60000);
-                const queueProcessTime = Math.ceil((booked * AVG_PROCESS_MIN) / ACTIVE_COUNTERS);
-                waitFromQueueStart = minsToStart + queueProcessTime;
+                const elapsedMin = Math.floor((now - slotStart) / 60000);
+                const alreadyProcessable = Math.floor((elapsedMin * ACTIVE_COUNTERS) / AVG_PROCESS_MIN);
+                const stillAheadInQueue = Math.max(0, booked - alreadyProcessable);
+                waitFromQueueStart = Math.ceil((stillAheadInQueue * AVG_PROCESS_MIN) / ACTIVE_COUNTERS);
             } else {
-                // Future date - wait = time to slot start + queue processing
                 const minsToStart = Math.ceil((slotStart - now) / 60000);
                 const queueProcessTime = Math.ceil((booked * AVG_PROCESS_MIN) / ACTIVE_COUNTERS);
                 waitFromQueueStart = minsToStart + queueProcessTime;
             }
 
-            if (waitFromQueueStart < 60) return waitFromQueueStart + ' min';
-            const hrs = Math.floor(waitFromQueueStart / 60);
-            const mins = waitFromQueueStart % 60;
-            return hrs + 'h ' + mins + 'm';
+            const MIN_WAIT_MINUTES = 5; // floor so "you're basically next" never shows as 0
+            return Math.max(waitFromQueueStart, MIN_WAIT_MINUTES);
+        }
+
+        // Turns a minute count into the duration text + clock time shown across the app
+        function formatWaitDisplay(waitMinutes) {
+            const now = new Date();
+            const expectedDate = new Date(now.getTime() + waitMinutes * 60000);
+            const timeStr = expectedDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+            let durationStr;
+            if (waitMinutes < 60) {
+                durationStr = waitMinutes + ' min';
+            } else {
+                const hrs = Math.floor(waitMinutes / 60);
+                const mins = waitMinutes % 60;
+                durationStr = hrs + 'h ' + mins + 'm';
+            }
+            return { durationStr, timeStr, expectedDate };
+        }
+
+        function getSlotEstimation(dateStr, slotKey) {
+            const waitMinutes = computeSlotWaitMinutes(dateStr, slotKey);
+            const { durationStr, timeStr } = formatWaitDisplay(waitMinutes);
+            return `${durationStr} · Expected around ${timeStr}`;
+        }
+
+        // ====== Disable time slots that have already ended today ======
+        function updateAvailableTimeSlots() {
+            const dateStr = document.getElementById('preferredDate').value;
+            const select = document.getElementById('timeSlot');
+            const notice = document.getElementById('timeSlotPastNotice');
+            const now = new Date();
+            const isToday = dateStr === now.toISOString().split('T')[0];
+
+            let anyAvailable = false;
+            let selectedWasDisabled = false;
+
+            Array.from(select.options).forEach(opt => {
+                const key = opt.getAttribute('data-slot');
+                if (!key) return; // the blank "Select Slot" placeholder
+
+                const slot = slotConfig[key];
+                const slotEnd = new Date(dateStr + 'T' + String(slot.endH).padStart(2, '0') + ':00:00');
+                const hasEnded = isToday && now >= slotEnd;
+
+                // Full slots stay selectable (soft warning, not a hard block) — just labeled
+                const onlinePool = centreCapacityData[key] ? centreCapacityData[key].online : null;
+                const isFull = onlinePool ? (onlinePool.capacity - onlinePool.booked) <= 0 : false;
+
+                opt.disabled = hasEnded;
+                let label = `${slot.label} (${slot.timing})`;
+                if (hasEnded) label += ' — Ended';
+                else if (isFull) label += ' — Full (you can still request this slot)';
+                opt.textContent = label;
+
+                if (!hasEnded) anyAvailable = true;
+                if (hasEnded && opt.value === select.value) selectedWasDisabled = true;
+            });
+
+            if (selectedWasDisabled) {
+                select.value = '';
+                document.getElementById('slotInfoBox').classList.remove('show');
+            }
+
+            if (isToday && !anyAvailable) {
+                notice.textContent = "All of today's slots have ended. Please choose tomorrow or a later date.";
+                notice.style.display = 'block';
+            } else {
+                notice.style.display = 'none';
+            }
+
+            updateSlotFullnessWarning();
+        }
+
+        // Warning banner shown under the dropdown when the CURRENTLY SELECTED slot is full
+        function updateSlotFullnessWarning() {
+            const slotKey = document.getElementById('timeSlot').value;
+            const warningEl = document.getElementById('timeSlotFullWarning');
+            const onlinePool = centreCapacityData[slotKey] ? centreCapacityData[slotKey].online : null;
+            const isFull = onlinePool ? (onlinePool.capacity - onlinePool.booked) <= 0 : false;
+
+            if (slotKey && isFull) {
+                warningEl.textContent = `⚠ This slot is already at full online capacity (${onlinePool.booked}/${onlinePool.capacity}). You can still book, but expect a longer wait, or consider another slot.`;
+                warningEl.style.display = 'block';
+            } else {
+                warningEl.style.display = 'none';
+            }
         }
 
         // ====== Slot info update on date/slot change ======
@@ -212,7 +299,7 @@
             const box = document.getElementById('slotInfoBox');
             if (!dateStr || !slotKey) { box.classList.remove('show'); return; }
             const slot = slotConfig[slotKey];
-            const booked = slotBookings[slotKey] || 0;
+            const booked = getSlotBookedCount(slotKey);
             document.getElementById('slotInfoName').textContent = slot.label + ' Slot';
             document.getElementById('slotInfoTiming').textContent = slot.timing;
             document.getElementById('slotInfoTokens').textContent = booked + ' / ' + slot.capacity;
@@ -222,8 +309,8 @@
             box.classList.add('show');
         }
 
-        document.getElementById('preferredDate').addEventListener('change', updateSlotInfo);
-        document.getElementById('timeSlot').addEventListener('change', updateSlotInfo);
+        document.getElementById('preferredDate').addEventListener('change', () => { updateAvailableTimeSlots(); updateSlotInfo(); });
+        document.getElementById('timeSlot').addEventListener('change', () => { updateSlotFullnessWarning(); updateSlotInfo(); });
 
         // ====== Navigation ======
         function showPage(pageId) {
@@ -308,6 +395,10 @@
                     serving: true
                 };
                 announceToken(nextWaiting.token, counterNum);
+                sendFarmerNotification(
+                    nextWaiting.mobile,
+                    `AgriQueue: You're up next! Token ${nextWaiting.token} — please proceed to Counter ${counterNum} now.`
+                );
                 showNotification('Token Called', `Token ${nextWaiting.token} called to Counter ${counterNum}`);
             } else {
                 counterData[counterNum].serving = false;
@@ -375,7 +466,7 @@
             let data = queueData;
             if (filter !== 'all') data = queueData.filter(q => q.type === filter);
             data.forEach(item => {
-                const statusClass = item.status === 'serving' ? 'bg-success' : item.status === 'waiting' ? 'bg-primary' : 'bg-secondary';
+                const statusClass = item.status === 'serving' ? 'bg-success' : item.status === 'waiting' ? 'bg-primary' : item.status === 'no_show' ? 'bg-danger' : 'bg-secondary';
                 const typeClass = item.type === 'online' ? 'bg-success' : 'bg-info';
                 tbody.innerHTML += `<tr>
                     <td><strong>${item.token}</strong></td>
@@ -383,7 +474,7 @@
                     <td><span class="badge ${typeClass}">${item.type.charAt(0).toUpperCase()+item.type.slice(1)}</span></td>
                     <td>${item.crop}</td>
                     <td>${item.quantity}</td>
-                    <td><span class="badge ${statusClass}">${item.status.charAt(0).toUpperCase()+item.status.slice(1)}${item.counter ? ' (C'+item.counter+')' : ''}</span></td>
+                    <td><span class="badge ${statusClass}">${item.status.replace('_',' ').replace(/^./, c => c.toUpperCase())}${item.counter ? ' (C'+item.counter+')' : ''}</span></td>
                 </tr>`;
             });
         }
@@ -414,6 +505,68 @@
         }
 
         // ====== Farmer Portal: Field Validation ======
+        // ====== Farmer Portal: Per-crop quantity limits ======
+        // Adjust these limits to your store's real daily/seasonal capacity per crop.
+        const cropQuantityLimits = {
+            paddy: { limit: 20000, used: 0 },
+            wheat: { limit: 20000, used: 0 },
+            rice:  { limit: 20000, used: 0 }
+        };
+
+        function getCropRemaining(crop) {
+            const c = cropQuantityLimits[crop];
+            return c ? Math.max(0, c.limit - c.used) : null;
+        }
+
+        function updateQuantityAvailability() {
+            const crop = document.getElementById('cropType').value;
+            const qtyField = document.getElementById('estimatedQuantity');
+            const hint = document.getElementById('quantityAvailableHint');
+
+            // Hard ceiling stays fixed at 50,000 kg regardless of crop — remaining crop
+            // capacity is now a soft warning, not a hard cap, so a farmer can still submit
+            // over the limit and confirm it at submission time.
+            qtyField.setAttribute('max', 50000);
+
+            if (!crop || !cropQuantityLimits[crop]) {
+                hint.textContent = '';
+                hint.classList.remove('text-danger');
+                return;
+            }
+
+            const remaining = getCropRemaining(crop);
+            hint.textContent = remaining > 0
+                ? `Available: ${remaining.toLocaleString()} kg for ${crop}`
+                : `No remaining capacity for ${crop} right now — you can still submit, but it will exceed today's limit.`;
+            hint.classList.toggle('text-danger', remaining <= 0);
+
+            updateQuantityWarning();
+        }
+
+        // Soft warning shown live as the farmer types, if their requested quantity
+        // exceeds what's actually left for the selected crop
+        function updateQuantityWarning() {
+            const crop = document.getElementById('cropType').value;
+            const qty = parseInt(document.getElementById('estimatedQuantity').value, 10) || 0;
+            const warningEl = document.getElementById('quantityOverLimitWarning');
+
+            if (!crop || !cropQuantityLimits[crop] || !qty) {
+                warningEl.style.display = 'none';
+                return;
+            }
+
+            const remaining = getCropRemaining(crop);
+            if (qty > remaining) {
+                warningEl.textContent = `⚠ You're requesting ${qty.toLocaleString()} kg, but only ${remaining.toLocaleString()} kg of ${crop} capacity remains today.`;
+                warningEl.style.display = 'block';
+            } else {
+                warningEl.style.display = 'none';
+            }
+        }
+
+        document.getElementById('cropType').addEventListener('change', updateQuantityAvailability);
+        document.getElementById('estimatedQuantity').addEventListener('input', updateQuantityWarning);
+
         const farmerFormFieldIds = [
             'farmerName', 'farmerId', 'farmerMobile', 'farmerAadhaar', 'farmerBank', 'farmerBankConfirm',
             'procurementCentre', 'cropType', 'estimatedQuantity', 'preferredDate', 'timeSlot'
@@ -669,6 +822,29 @@
         });
 
         // ====== Farmer Portal: Join Queue ======
+        // ====== Demo SMS/WhatsApp notifications ======
+        // Fires a real request to the backend demo endpoint, which just logs what
+        // WOULD be sent (see controllers/notificationController.js). Also surfaces
+        // it as an in-app toast so the flow is visible without a real phone.
+        async function sendFarmerNotification(mobile, message, channel = 'sms') {
+            if (!mobile) return; // e.g. kiosk tokens don't currently collect a mobile number
+            try {
+                const res = await fetch('/api/notifications/send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mobile, message, channel })
+                });
+                const data = await res.json().catch(() => null);
+                if (res.ok) {
+                    console.log(`[notify] ${channel.toUpperCase()} to ${mobile}: "${message}"`);
+                } else {
+                    console.warn('[notify] Failed to send:', data && data.error);
+                }
+            } catch (err) {
+                console.warn('[notify] Network error sending notification:', err);
+            }
+        }
+
         document.getElementById('joinQueueForm').addEventListener('submit', function(e) {
             e.preventDefault();
 
@@ -678,31 +854,80 @@
                 return;
             }
 
+            // ---- Soft overbooking warning: doesn't block, just confirms with the farmer ----
+            const chosenSlot = document.getElementById('timeSlot').value;
+            const chosenCrop = document.getElementById('cropType').value;
+            const chosenQty = parseInt(document.getElementById('estimatedQuantity').value, 10) || 0;
+
+            const overbookMessages = [];
+            const onlinePool = centreCapacityData[chosenSlot] ? centreCapacityData[chosenSlot].online : null;
+            if (onlinePool && (onlinePool.capacity - onlinePool.booked) <= 0) {
+                overbookMessages.push(`• The ${slotConfig[chosenSlot].label} slot is already at full online capacity (${onlinePool.booked}/${onlinePool.capacity}).`);
+            }
+            const cropRemaining = getCropRemaining(chosenCrop);
+            if (cropRemaining !== null && chosenQty > cropRemaining) {
+                overbookMessages.push(`• You're requesting ${chosenQty.toLocaleString()} kg of ${chosenCrop}, but only ${cropRemaining.toLocaleString()} kg remains available today.`);
+            }
+
+            if (overbookMessages.length > 0) {
+                const proceed = window.confirm(
+                    "Heads up — this booking exceeds today's normal capacity:\n\n" +
+                    overbookMessages.join('\n') +
+                    "\n\nYou can still proceed, but expect longer waits or delayed processing. Submit anyway?"
+                );
+                if (!proceed) return;
+            }
+
             document.getElementById('loadingSpinner').classList.add('active');
             setTimeout(() => {
                 document.getElementById('loadingSpinner').classList.remove('active');
+                const bookedCrop = document.getElementById('cropType').value;
+                const bookedQty = parseInt(document.getElementById('estimatedQuantity').value, 10) || 0;
+                if (cropQuantityLimits[bookedCrop]) {
+                    cropQuantityLimits[bookedCrop].used += bookedQty;
+                    updateQuantityAvailability(); // refresh hint so the next farmer sees the new remaining kg
+                }
                 const onlineTokens = queueData.filter(q => q.type === 'online');
                 const nextNum = onlineTokens.length + 30;
                 const token = 'O-' + String(nextNum).padStart(3, '0');
                 const waitingCount = queueData.filter(q => q.status === 'waiting').length;
-                const newToken = {
-                    token, farmer: document.getElementById('farmerName').value,
-                    type: 'online', crop: document.getElementById('cropType').value,
-                    quantity: document.getElementById('estimatedQuantity').value,
-                    status: 'waiting', counter: null
-                };
-                queueData.push(newToken);
-                currentToken = token;
 
                 // Calculate accurate ETA based on selected slot
                 const dateStr = document.getElementById('preferredDate').value;
                 const slotKey = document.getElementById('timeSlot').value;
-                let etaText;
+                const farmerMobile = document.getElementById('farmerMobile').value;
+
+                const newToken = {
+                    token, farmer: document.getElementById('farmerName').value,
+                    type: 'online', crop: document.getElementById('cropType').value,
+                    quantity: document.getElementById('estimatedQuantity').value,
+                    status: 'waiting', counter: null,
+                    mobile: farmerMobile, slot: slotKey, date: dateStr
+                };
+                queueData.push(newToken);
+                renderHomeQueueStatus();
+                currentToken = token;
+
+                // This booking just used up one of that slot's available ONLINE tokens —
+                // update Centre Capacity (admin) and Available Slots (home) together
+                if (centreCapacityData[slotKey]) {
+                    centreCapacityData[slotKey].online.booked += 1;
+                    renderCentreCapacityCard();
+                    renderHomeQueueStatus();
+                    updateSlotInfo();
+                }
+
+                let etaText, expectedDate;
                 if (dateStr && slotKey) {
-                    etaText = getSlotEstimation(dateStr, slotKey);
+                    const waitMinutes = computeSlotWaitMinutes(dateStr, slotKey);
+                    const formatted = formatWaitDisplay(waitMinutes);
+                    etaText = `${formatted.durationStr} · Expected around ${formatted.timeStr}`;
+                    expectedDate = formatted.expectedDate;
                 } else {
-                    const etaMin = Math.ceil(((waitingCount + 1) * AVG_PROCESS_MIN) / ACTIVE_COUNTERS);
-                    etaText = etaMin + ' min';
+                    const waitMinutes = Math.max(5, Math.ceil(((waitingCount + 1) * AVG_PROCESS_MIN) / ACTIVE_COUNTERS));
+                    const formatted = formatWaitDisplay(waitMinutes);
+                    etaText = `${formatted.durationStr} · Expected around ${formatted.timeStr}`;
+                    expectedDate = formatted.expectedDate;
                 }
 
                 document.getElementById('tokenStatus').style.display = 'block';
@@ -712,23 +937,14 @@
                 document.getElementById('counterNumber').textContent = '-';
                 const progress = Math.max(5, 100 - ((waitingCount + 1) * 5));
                 document.getElementById('progressBar').style.width = progress + '%';
-
-                // Calculate expected turn time
-                const now = new Date();
-                let etaMinutes;
-                if (dateStr && slotKey) {
-                    const slot = slotConfig[slotKey];
-                    const slotStart = new Date(dateStr + 'T' + String(slot.startH).padStart(2,'0') + ':00:00');
-                    const queueProcess = Math.ceil(((waitingCount + 1) * AVG_PROCESS_MIN) / ACTIVE_COUNTERS);
-                    etaMinutes = Math.max(0, Math.ceil((slotStart - now) / 60000) + queueProcess);
-                } else {
-                    etaMinutes = Math.ceil(((waitingCount + 1) * AVG_PROCESS_MIN) / ACTIVE_COUNTERS);
-                }
-                const expectedTime = new Date(now.getTime() + etaMinutes * 60000);
-                document.getElementById('expectedTime').textContent = expectedTime.toLocaleTimeString();
+                document.getElementById('expectedTime').textContent = expectedDate.toLocaleTimeString();
 
                 showNotification('Token Booked', `Your token ${token} has been booked. ETA: ${etaText}`);
-                
+                sendFarmerNotification(
+                    farmerMobile,
+                    `AgriQueue: Your token ${token} is confirmed for the ${slotConfig[slotKey] ? slotConfig[slotKey].label : ''} slot on ${dateStr}. Estimated wait: ${etaText}.`
+                );
+
                 // Start the pipeline tracker - auto-advances through confirmed → checked_in → waiting
                 startPipelineOnBooking();
             }, 1500);
@@ -739,12 +955,19 @@
             const td = queueData.find(q => q.token === currentToken);
             if (!td) return;
             const waitingAhead = queueData.filter(q => q.status === 'waiting' && queueData.indexOf(q) < queueData.indexOf(td)).length;
-            const waitingCount = queueData.filter(q => q.status === 'waiting').length;
             document.getElementById('queuePosition').textContent = waitingAhead + 1;
-            const etaMin = Math.ceil(((waitingAhead + 1) * AVG_PROCESS_MIN) / ACTIVE_COUNTERS);
-            document.getElementById('waitTime').textContent = etaMin + ' min';
-            const now = new Date();
-            document.getElementById('expectedTime').textContent = new Date(now.getTime() + etaMin * 60000).toLocaleTimeString();
+
+            // Use the SAME slot-aware calculation as the initial booking screen, so
+            // Refresh never disagrees with what was shown right after booking.
+            let waitMinutes;
+            if (td.date && td.slot) {
+                waitMinutes = computeSlotWaitMinutes(td.date, td.slot);
+            } else {
+                waitMinutes = Math.max(5, Math.ceil(((waitingAhead + 1) * AVG_PROCESS_MIN) / ACTIVE_COUNTERS));
+            }
+            const { durationStr, timeStr, expectedDate } = formatWaitDisplay(waitMinutes);
+            document.getElementById('waitTime').textContent = `${durationStr} · Expected around ${timeStr}`;
+            document.getElementById('expectedTime').textContent = expectedDate.toLocaleTimeString();
             document.getElementById('progressBar').style.width = Math.max(5, 100 - ((waitingAhead + 1) * 5)) + '%';
             if (td.status === 'serving') {
                 document.getElementById('counterNumber').textContent = 'C' + td.counter;
@@ -767,15 +990,56 @@
 
         // ====== Kiosk ======
         function kioskNextStep(step) {
+            if (step === 3 && !confirmKioskCapacity()) return; // stay on current step if farmer declines
             document.querySelectorAll('.kiosk-step').forEach(s => s.classList.remove('active'));
             document.getElementById('kioskStep' + step).classList.add('active');
             if (step === 3) generateKioskToken();
         }
+
+        // Soft overbooking check for the kiosk flow — same idea as the online form,
+        // just against the KIOSK pool (and the auto-assigned current-time slot) instead.
+        function confirmKioskCapacity() {
+            const crop = document.getElementById('kioskCropType').value;
+            const qty = parseInt(document.getElementById('kioskQuantity').value, 10) || 0;
+            const slotKey = getCurrentSlotKey();
+            const kioskPool = centreCapacityData[slotKey] ? centreCapacityData[slotKey].kiosk : null;
+
+            const messages = [];
+            if (kioskPool && (kioskPool.capacity - kioskPool.booked) <= 0) {
+                messages.push(`• The ${slotConfig[slotKey].label} slot is already at full kiosk capacity (${kioskPool.booked}/${kioskPool.capacity}).`);
+            }
+            const cropRemaining = getCropRemaining(crop);
+            if (cropRemaining !== null && qty > cropRemaining) {
+                messages.push(`• This request is ${qty.toLocaleString()} kg of ${crop}, but only ${cropRemaining.toLocaleString()} kg remains available today.`);
+            }
+
+            if (messages.length === 0) return true;
+            return window.confirm(
+                "Heads up — this exceeds today's normal capacity:\n\n" + messages.join('\n') +
+                "\n\nProceed anyway?"
+            );
+        }
+
         function generateKioskToken() {
             const kioskTokens = queueData.filter(q => q.type === 'kiosk');
             const token = 'K-' + String(kioskTokens.length + 22).padStart(3, '0');
             const waitingCount = queueData.filter(q => q.status === 'waiting').length;
-            queueData.push({ token, farmer: 'Kiosk Farmer', type: 'kiosk', crop: document.getElementById('kioskCropType').value, quantity: document.getElementById('kioskQuantity').value, status: 'waiting', counter: null });
+            const crop = document.getElementById('kioskCropType').value;
+            const qty = parseInt(document.getElementById('kioskQuantity').value, 10) || 0;
+            queueData.push({ token, farmer: 'Kiosk Farmer', type: 'kiosk', crop, quantity: qty, status: 'waiting', counter: null });
+
+            // Kiosk is a walk-in — there's no slot picker, so count it against whichever
+            // slot the current time falls into, using the KIOSK pool for that slot.
+            const kioskSlotKey = getCurrentSlotKey();
+            if (centreCapacityData[kioskSlotKey]) {
+                centreCapacityData[kioskSlotKey].kiosk.booked += 1;
+                renderCentreCapacityCard();
+            }
+            // Kiosk quantity also draws down the same shared crop pool the online form uses
+            if (cropQuantityLimits[crop]) {
+                cropQuantityLimits[crop].used += qty;
+            }
+            renderHomeQueueStatus();
             const etaMin = Math.ceil(((waitingCount + 1) * AVG_PROCESS_MIN) / ACTIVE_COUNTERS);
             document.getElementById('kioskTokenNumber').textContent = token;
             document.getElementById('kioskQueuePosition').textContent = waitingCount + 1;
@@ -914,75 +1178,98 @@
         }
 
         // ====== Admin Dashboard: Centre Capacity settings ======
+        // Each slot now has its own Online pool and Kiosk pool, so the two channels
+        // can be tracked (and limited) independently instead of sharing one number.
         const centreCapacityData = {
-            morning:   { label: 'Morning',   booked: 60, capacity: 80, barId: 'capMorningBar',   pctId: 'capMorningPct',   bookedId: 'capMorningBooked' },
-            afternoon: { label: 'Afternoon', booked: 48, capacity: 80, barId: 'capAfternoonBar', pctId: 'capAfternoonPct', bookedId: 'capAfternoonBooked' },
-            evening:   { label: 'Evening',   booked: 32, capacity: 80, barId: 'capEveningBar',   pctId: 'capEveningPct',   bookedId: 'capEveningBooked' }
+            morning:   { label: 'Morning',   online: { capacity: 40, booked: 30 }, kiosk: { capacity: 40, booked: 30 }, barId: 'capMorningBar',   pctId: 'capMorningPct',   bookedId: 'capMorningBooked' },
+            afternoon: { label: 'Afternoon', online: { capacity: 40, booked: 24 }, kiosk: { capacity: 40, booked: 24 }, barId: 'capAfternoonBar', pctId: 'capAfternoonPct', bookedId: 'capAfternoonBooked' },
+            evening:   { label: 'Evening',   online: { capacity: 40, booked: 16 }, kiosk: { capacity: 40, booked: 16 }, barId: 'capEveningBar',   pctId: 'capEveningPct',   bookedId: 'capEveningBooked' }
         };
+
+        function slotTotalCapacity(slot) { return slot.online.capacity + slot.kiosk.capacity; }
+        function slotTotalBooked(slot) { return slot.online.booked + slot.kiosk.booked; }
+
+        // Maps the current wall-clock time to a slot key, so walk-in kiosk tokens
+        // (which don't ask the farmer to pick a slot) still count against the right pool.
+        function getCurrentSlotKey() {
+            const hour = new Date().getHours();
+            for (const [key, slot] of Object.entries(slotConfig)) {
+                if (hour >= slot.startH && hour < slot.endH) return key;
+            }
+            return 'morning'; // outside business hours — default bucket
+        }
 
         function renderCentreCapacityCard() {
             Object.values(centreCapacityData).forEach(slot => {
-                const pct = Math.min(100, Math.round((slot.booked / slot.capacity) * 100));
+                const capacity = slotTotalCapacity(slot);
+                const booked = slotTotalBooked(slot);
+                const pct = Math.min(100, Math.round((booked / capacity) * 100));
                 document.getElementById(slot.pctId).textContent = pct + '%';
                 document.getElementById(slot.barId).style.width = pct + '%';
-                document.getElementById(slot.bookedId).textContent = `${slot.booked}/${slot.capacity} tokens booked`;
+                document.getElementById(slot.bookedId).textContent = `${booked}/${capacity} tokens booked (Online ${slot.online.booked}/${slot.online.capacity} · Kiosk ${slot.kiosk.booked}/${slot.kiosk.capacity})`;
             });
         }
 
         function openCapacitySettings() {
-            document.getElementById('capMorningInput').value = centreCapacityData.morning.capacity;
-            document.getElementById('capAfternoonInput').value = centreCapacityData.afternoon.capacity;
-            document.getElementById('capEveningInput').value = centreCapacityData.evening.capacity;
-            ['capMorningInput', 'capAfternoonInput', 'capEveningInput'].forEach(id => {
-                document.getElementById(id).classList.remove('is-invalid');
+            ['morning', 'afternoon', 'evening'].forEach(key => {
+                document.getElementById(`cap${capitalize(key)}OnlineInput`).value = centreCapacityData[key].online.capacity;
+                document.getElementById(`cap${capitalize(key)}KioskInput`).value = centreCapacityData[key].kiosk.capacity;
+                document.getElementById(`cap${capitalize(key)}OnlineInput`).classList.remove('is-invalid');
+                document.getElementById(`cap${capitalize(key)}KioskInput`).classList.remove('is-invalid');
             });
             new bootstrap.Modal(document.getElementById('capacitySettingsModal')).show();
         }
 
-        function saveCapacitySettings() {
-            const fields = [
-                { key: 'morning',   inputId: 'capMorningInput',   errorId: 'capMorningError' },
-                { key: 'afternoon', inputId: 'capAfternoonInput', errorId: 'capAfternoonError' },
-                { key: 'evening',   inputId: 'capEveningInput',   errorId: 'capEveningError' }
-            ];
+        function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
+        function saveCapacitySettings() {
+            const slots = ['morning', 'afternoon', 'evening'];
+            const channels = ['online', 'kiosk'];
             let allValid = true;
             const newValues = {};
 
-            fields.forEach(({ key, inputId, errorId }) => {
-                const input = document.getElementById(inputId);
-                const errorEl = document.getElementById(errorId);
-                const value = parseInt(input.value, 10);
-                const booked = centreCapacityData[key].booked;
-                let message = '';
+            slots.forEach(key => {
+                newValues[key] = {};
+                channels.forEach(channel => {
+                    const inputId = `cap${capitalize(key)}${capitalize(channel)}Input`;
+                    const errorId = `cap${capitalize(key)}${capitalize(channel)}Error`;
+                    const input = document.getElementById(inputId);
+                    const errorEl = document.getElementById(errorId);
+                    const value = parseInt(input.value, 10);
+                    const booked = centreCapacityData[key][channel].booked;
+                    let message = '';
 
-                if (!Number.isInteger(value) || value < 1) {
-                    message = 'Enter a whole number of at least 1.';
-                } else if (value < booked) {
-                    message = `Can't be less than the ${booked} tokens already booked.`;
-                }
+                    if (!Number.isInteger(value) || value < 1) {
+                        message = 'Enter a whole number of at least 1.';
+                    } else if (value < booked) {
+                        message = `Can't be less than the ${booked} already booked.`;
+                    }
 
-                if (message) {
-                    input.classList.add('is-invalid');
-                    errorEl.textContent = message;
-                    errorEl.style.display = 'block';
-                    allValid = false;
-                } else {
-                    input.classList.remove('is-invalid');
-                    errorEl.style.display = 'none';
-                    newValues[key] = value;
-                }
+                    if (message) {
+                        input.classList.add('is-invalid');
+                        errorEl.textContent = message;
+                        errorEl.style.display = 'block';
+                        allValid = false;
+                    } else {
+                        input.classList.remove('is-invalid');
+                        errorEl.style.display = 'none';
+                        newValues[key][channel] = value;
+                    }
+                });
             });
 
             if (!allValid) return;
 
-            Object.keys(newValues).forEach(key => {
-                centreCapacityData[key].capacity = newValues[key];
-                // Keep the farmer-facing slot estimation in sync with the new capacity too
-                if (slotConfig[key]) slotConfig[key].capacity = newValues[key];
+            slots.forEach(key => {
+                centreCapacityData[key].online.capacity = newValues[key].online;
+                centreCapacityData[key].kiosk.capacity = newValues[key].kiosk;
+                // Keep the farmer-facing slot estimation (total seats in that slot) in sync
+                if (slotConfig[key]) slotConfig[key].capacity = newValues[key].online + newValues[key].kiosk;
             });
 
             renderCentreCapacityCard();
+            renderHomeQueueStatus(); // Available Slots on the home page depends on the same data
+            updateSlotInfo(); // "Tokens in Slot" on the farmer portal depends on it too
             bootstrap.Modal.getInstance(document.getElementById('capacitySettingsModal')).hide();
         }
 
@@ -1153,15 +1440,84 @@
             if (card) card.style.display = 'none';
         }
 
+        // ====== Home Page: Live Queue Status (online + kiosk/offline combined) ======
+        function getAvailableSlots(channel) {
+            return Object.values(centreCapacityData).reduce((sum, slot) => sum + Math.max(0, slot[channel].capacity - slot[channel].booked), 0);
+        }
+        function getTotalSlots(channel) {
+            return Object.values(centreCapacityData).reduce((sum, slot) => sum + slot[channel].capacity, 0);
+        }
+
+        function renderHomeQueueStatus() {
+            const waiting = queueData.filter(q => q.status === 'waiting').length;
+            const serving = queueData.filter(q => q.status === 'serving').length;
+
+            document.getElementById('homeQueueCount').textContent = waiting + serving;
+            document.getElementById('homeServedCount').textContent = servedCount;
+            document.getElementById('homeAvgWait').textContent = Math.ceil((waiting * AVG_PROCESS_MIN) / ACTIVE_COUNTERS);
+            document.getElementById('homeActiveCounters').textContent = ACTIVE_COUNTERS;
+
+            // Split by access mode so kiosk/offline availability is just as visible as online
+            const onlineActive = queueData.filter(q => q.type === 'online' && (q.status === 'waiting' || q.status === 'serving')).length;
+            const kioskActive = queueData.filter(q => q.type === 'kiosk' && (q.status === 'waiting' || q.status === 'serving')).length;
+            const totalActive = onlineActive + kioskActive;
+            const onlinePct = totalActive > 0 ? Math.round((onlineActive / totalActive) * 100) : 0;
+            const kioskPct = totalActive > 0 ? 100 - onlinePct : 0;
+
+            document.getElementById('homeOnlineCount').textContent = onlineActive;
+            document.getElementById('homeKioskCount').textContent = kioskActive;
+            document.getElementById('homeOnlinePercent').textContent = onlinePct + '%';
+            document.getElementById('homeKioskPercent').textContent = kioskPct + '%';
+            document.getElementById('homeOnlineBar').style.width = onlinePct + '%';
+            document.getElementById('homeKioskBar').style.width = kioskPct + '%';
+
+            // Real available capacity, pulled from the same slot data the admin settings modal edits
+            const availOnline = getAvailableSlots('online');
+            const availKiosk = getAvailableSlots('kiosk');
+            const totalOnline = getTotalSlots('online');
+            const totalKiosk = getTotalSlots('kiosk');
+            document.getElementById('homeAvailableOnline').textContent = `${availOnline} / ${totalOnline}`;
+            document.getElementById('homeAvailableKiosk').textContent = `${availKiosk} / ${totalKiosk}`;
+            document.getElementById('homeAvailableTotal').textContent = `${availOnline + availKiosk} / ${totalOnline + totalKiosk}`;
+        }
+
+        // ====== No-show detection ======
+        // Periodically scans for tokens whose booked slot has ended while they were
+        // still 'waiting' (never got called to a counter) and marks + notifies them.
+        function checkForNoShows() {
+            const now = new Date();
+            const todayStr = now.toISOString().split('T')[0];
+
+            queueData.forEach(q => {
+                if (q.status !== 'waiting' || !q.slot || !q.date) return;
+                const slot = slotConfig[q.slot];
+                if (!slot) return;
+
+                const slotEnd = new Date(q.date + 'T' + String(slot.endH).padStart(2, '0') + ':00:00');
+                if (now >= slotEnd) {
+                    q.status = 'no_show';
+                    sendFarmerNotification(
+                        q.mobile,
+                        `AgriQueue: You missed your ${slot.label} slot for token ${q.token}. Please book a new slot to rejoin the queue.`
+                    );
+                }
+            });
+        }
+
         // ====== Init ======
         function init() {
             initQueueData();
             initCounterData();
             updateTimes();
             setInterval(updateTimes, 1000);
+            renderHomeQueueStatus();
+            setInterval(renderHomeQueueStatus, 8000); // keep the home card "live" without needing a manual refresh
             const today = new Date().toISOString().split('T')[0];
             document.getElementById('preferredDate').setAttribute('min', today);
             document.getElementById('preferredDate').value = today;
+            updateAvailableTimeSlots();
+            setInterval(updateAvailableTimeSlots, 60000); // re-check every minute so a slot disables itself the moment it ends
+            setInterval(checkForNoShows, 60000); // same cadence — catch tokens whose slot just ended
             AOS.init();
         }
         document.addEventListener('DOMContentLoaded', init);

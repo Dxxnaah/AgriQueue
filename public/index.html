@@ -61,7 +61,12 @@
                                         <i class="bi bi-people-fill text-success fs-4"></i>
                                     </div>
                                     <div>
-                                        <h5 class="mb-0" data-i18n="live_queue">Live Queue Status</h5>
+                                        <h5 class="mb-0">
+                                            <span data-i18n="live_queue">Live Queue Status</span>
+                                            <span class="badge bg-success bg-opacity-10 text-success ms-2" style="font-size:0.6rem; vertical-align:middle;">
+                                                <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--success); animation: pulse-green 1.5s ease-in-out infinite; margin-right:4px;"></span>LIVE
+                                            </span>
+                                        </h5>
                                         <small class="text-muted" data-i18n="centre_name">Tamil Nadu Procurement Centre</small>
                                     </div>
                                 </div>
@@ -94,14 +99,26 @@
                                 <div class="mt-3">
                                     <div class="d-flex justify-content-between mb-1">
                                         <small data-i18n="online_tokens">Online Tokens</small>
-                                        <small id="homeOnlinePercent">60%</small>
+                                        <small><span id="homeOnlineCount">0</span> tokens · <span id="homeOnlinePercent">60%</span></small>
                                     </div>
-                                    <div class="progress"><div class="progress-bar" style="width: 60%"></div></div>
+                                    <div class="progress"><div class="progress-bar" id="homeOnlineBar" style="width: 60%"></div></div>
                                     <div class="d-flex justify-content-between mb-1 mt-2">
                                         <small data-i18n="kiosk_tokens">Kiosk Tokens</small>
-                                        <small id="homeKioskPercent">40%</small>
+                                        <small><span id="homeKioskCount">0</span> tokens · <span id="homeKioskPercent">40%</span></small>
                                     </div>
-                                    <div class="progress"><div class="progress-bar bg-info" style="width: 40%"></div></div>
+                                    <div class="progress"><div class="progress-bar bg-info" id="homeKioskBar" style="width: 40%"></div></div>
+                                    <div class="d-flex justify-content-between mt-3 pt-2" style="border-top: 1px dashed #e2e8f0;">
+                                        <small class="text-muted">Available Online Slots</small>
+                                        <small class="fw-semibold" id="homeAvailableOnline">-</small>
+                                    </div>
+                                    <div class="d-flex justify-content-between mt-1">
+                                        <small class="text-muted">Available Kiosk Slots</small>
+                                        <small class="fw-semibold" id="homeAvailableKiosk">-</small>
+                                    </div>
+                                    <div class="d-flex justify-content-between mt-1 pt-1" style="border-top: 1px dashed #e2e8f0;">
+                                        <small class="text-muted fw-semibold">Total Available Slots</small>
+                                        <small class="fw-bold text-success" id="homeAvailableTotal">-</small>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -388,6 +405,8 @@
                                     <div class="col-md-6">
                                         <label class="form-label" data-i18n="est_qty">Estimated Quantity (kg)</label>
                                         <input type="number" class="form-control" id="estimatedQuantity" placeholder="e.g. 500" required min="1" max="50000" step="1">
+                                        <div class="form-text" id="quantityAvailableHint"></div>
+                                        <div class="form-text text-warning" id="quantityOverLimitWarning" style="display:none;"></div>
                                         <div class="invalid-feedback">Enter a quantity between 1 and 50,000 kg.</div>
                                     </div>
                                     <div class="col-md-6">
@@ -399,11 +418,13 @@
                                         <label class="form-label" data-i18n="pref_slot">Preferred Time Slot</label>
                                         <select class="form-select" id="timeSlot" required>
                                             <option value="">Select Slot</option>
-                                            <option value="morning">Morning (8:00 AM - 12:00 PM)</option>
-                                            <option value="afternoon">Afternoon (12:00 PM - 4:00 PM)</option>
-                                            <option value="evening">Evening (4:00 PM - 8:00 PM)</option>
+                                            <option value="morning" data-slot="morning">Morning (8:00 AM - 12:00 PM)</option>
+                                            <option value="afternoon" data-slot="afternoon">Afternoon (12:00 PM - 4:00 PM)</option>
+                                            <option value="evening" data-slot="evening">Evening (4:00 PM - 8:00 PM)</option>
                                         </select>
                                         <div class="invalid-feedback">Please select a preferred time slot.</div>
+                                        <div class="form-text text-danger" id="timeSlotPastNotice" style="display:none;"></div>
+                                        <div class="form-text text-warning" id="timeSlotFullWarning" style="display:none;"></div>
                                     </div>
                                     <div class="col-12">
                                         <!-- Slot estimation info box -->
@@ -831,21 +852,48 @@
 
     <!-- Modals -->
     <div class="modal fade" id="capacitySettingsModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h5 class="modal-title"><i class="bi bi-gear-fill me-2"></i>Edit Slot Capacity</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body">
-        <p class="text-muted small">Set the maximum number of tokens each slot can accept today.</p>
-        <div class="mb-3">
-            <label class="form-label">Morning Slot (8:00 AM - 12:00 PM)</label>
-            <input type="number" class="form-control" id="capMorningInput" min="1" step="1" required>
-            <div class="invalid-feedback" id="capMorningError"></div>
+        <p class="text-muted small">Set the maximum number of tokens each channel can accept per slot.</p>
+
+        <p class="fw-semibold mb-2">Morning Slot (8:00 AM - 12:00 PM)</p>
+        <div class="row g-2 mb-3">
+            <div class="col-6">
+                <label class="form-label small">Online capacity</label>
+                <input type="number" class="form-control" id="capMorningOnlineInput" min="1" step="1" required>
+                <div class="invalid-feedback" id="capMorningOnlineError"></div>
+            </div>
+            <div class="col-6">
+                <label class="form-label small">Kiosk capacity</label>
+                <input type="number" class="form-control" id="capMorningKioskInput" min="1" step="1" required>
+                <div class="invalid-feedback" id="capMorningKioskError"></div>
+            </div>
         </div>
-        <div class="mb-3">
-            <label class="form-label">Afternoon Slot (12:00 PM - 4:00 PM)</label>
-            <input type="number" class="form-control" id="capAfternoonInput" min="1" step="1" required>
-            <div class="invalid-feedback" id="capAfternoonError"></div>
+
+        <p class="fw-semibold mb-2">Afternoon Slot (12:00 PM - 4:00 PM)</p>
+        <div class="row g-2 mb-3">
+            <div class="col-6">
+                <label class="form-label small">Online capacity</label>
+                <input type="number" class="form-control" id="capAfternoonOnlineInput" min="1" step="1" required>
+                <div class="invalid-feedback" id="capAfternoonOnlineError"></div>
+            </div>
+            <div class="col-6">
+                <label class="form-label small">Kiosk capacity</label>
+                <input type="number" class="form-control" id="capAfternoonKioskInput" min="1" step="1" required>
+                <div class="invalid-feedback" id="capAfternoonKioskError"></div>
+            </div>
         </div>
-        <div class="mb-3">
-            <label class="form-label">Evening Slot (4:00 PM - 8:00 PM)</label>
-            <input type="number" class="form-control" id="capEveningInput" min="1" step="1" required>
-            <div class="invalid-feedback" id="capEveningError"></div>
+
+        <p class="fw-semibold mb-2">Evening Slot (4:00 PM - 8:00 PM)</p>
+        <div class="row g-2 mb-3">
+            <div class="col-6">
+                <label class="form-label small">Online capacity</label>
+                <input type="number" class="form-control" id="capEveningOnlineInput" min="1" step="1" required>
+                <div class="invalid-feedback" id="capEveningOnlineError"></div>
+            </div>
+            <div class="col-6">
+                <label class="form-label small">Kiosk capacity</label>
+                <input type="number" class="form-control" id="capEveningKioskInput" min="1" step="1" required>
+                <div class="invalid-feedback" id="capEveningKioskError"></div>
+            </div>
         </div>
     </div><div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button><button type="button" class="btn btn-gradient" onclick="saveCapacitySettings()"><i class="bi bi-check-circle me-2"></i>Save</button></div></div></div></div>
 
