@@ -18,7 +18,7 @@ const kioskRoutes = require('./routes/kioskRoutes');
 const displayRoutes = require('./routes/displayRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const aadhaarRoutes = require('./routes/aadhaarRoutes');
-const notificationRoutes = require('./routes/notificationRoutes');
+const notificationRoutes = require('./routes/NotificationRoutes');
 
 const app = express();
 const server = http.createServer(app);
