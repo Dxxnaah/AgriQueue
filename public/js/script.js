@@ -73,6 +73,43 @@
                 queue_list: 'வரிசை பட்டியல்', call_next: 'அடுத்து அழை', recall: 'மீண்டும் அறிவி', complete: 'முடி',
                 quality: 'தரம்', weight: 'எடை', payment: 'கட்டணம்',
                 current: 'தற்போதைய', farmer_label: 'விவசாயி', crop_label: 'பயிர்', none: 'எதுவுமில்லை', active_label: 'செயலில்'
+            },
+            hi: {
+                nav_home: 'होम', nav_farmer: 'किसान पोर्टल', nav_display: 'डिस्प्ले', nav_staff: 'स्टाफ', nav_admin: 'एडमिन',
+                hero_title: 'एक कतार। दो एक्सेस मोड। शून्य भ्रम।',
+                hero_subtitle: 'एक हाइब्रिड खरीद कतार प्रणाली जो ऑनलाइन और कियोस्क टोकन को एक वास्तविक समय की कतार में निष्पक्ष रूप से जोड़ती है, साथ में लाइव ETA, डिजिटल/वॉइस घोषणाएं और पूरी खरीद व भुगतान ट्रैकिंग।',
+                hero_cta1: 'किसान पोर्टल',
+                live_queue: 'लाइव कतार स्थिति', centre_name: 'तमिलनाडु खरीद केंद्र',
+                in_queue: 'कतार में', served_today: 'आज सेवा प्रदान की गई', avg_wait: 'औसत प्रतीक्षा (मिनट)', active_counters: 'सक्रिय काउंटर',
+                online_tokens: 'ऑनलाइन टोकन', kiosk_tokens: 'कियोस्क टोकन',
+                why_title: 'AgriQueue क्यों?', why_subtitle: 'सरकारी खरीद केंद्रों के लिए क्रांतिकारी कतार प्रबंधन',
+                feat1_title: 'हाइब्रिड एक्सेस', feat1_desc: 'एक ही एकीकृत कतार में ऑनलाइन + कियोस्क टोकन। डिजिटल बहिष्कार के कारण कोई भी किसान पीछे नहीं छूटेगा।',
+                feat2_title: 'निष्पक्ष कतार एल्गोरिदम', feat2_desc: 'बारी-बारी से O-K-O-K टोकन आवंटन ऑनलाइन और कियोस्क दोनों किसानों के लिए समान पहुंच सुनिश्चित करता है।',
+                feat3_title: 'रीयल-टाइम दृश्यता', feat3_desc: 'लाइव कतार स्थिति और ETA किसानों को बिना अंधाधुंध इंतजार किए अपना समय कुशलता से योजना बनाने में मदद करते हैं।',
+                feat4_title: 'भौतिक केंद्र स्वचालन', feat4_desc: 'डिजिटल डिस्प्ले और वॉइस घोषणाएं सुनिश्चित करती हैं कि स्मार्टफोन न होने पर भी कोई किसान अपनी बारी न चूके।',
+                feat5_title: 'एंड-टू-एंड पारदर्शिता', feat5_desc: 'गुणवत्ता जांच, वजन माप, खरीद राशि और भुगतान स्थिति को रीयल-टाइम में ट्रैक करें।',
+                feat6_title: 'परिचालन एनालिटिक्स', feat6_desc: 'केंद्र प्रशासकों को क्षमता अनुकूलित करने, प्रतीक्षा समय कम करने और दक्षता बढ़ाने के लिए रीयल-टाइम जानकारी मिलती है।',
+                how_title: 'यह कैसे काम करता है', how_subtitle: 'किसानों के लिए सरल 5-चरण प्रक्रिया',
+                step1: 'पंजीकरण करें', step1_desc: 'ऑनलाइन या कियोस्क पर', step2: 'टोकन प्राप्त करें', step2_desc: 'ऑनलाइन (O) या कियोस्क (K)',
+                step3: 'कहीं भी प्रतीक्षा करें', step3_desc: 'ऐप/डिस्प्ले के माध्यम से ट्रैक करें', step4: 'सूचना प्राप्त करें', step4_desc: 'डिस्प्ले + वॉइस अलर्ट',
+                step5: 'खरीद', step5_desc: 'गुणवत्ता, वजन, राशि', step6: 'भुगतान', step6_desc: 'भुगतान स्थिति ट्रैक करें',
+                current_time: 'वर्तमान समय', est_turn: 'अनुमानित बारी', your_token: 'आपका टोकन',
+                position: 'स्थिति', est_wait: 'अनुमानित प्रतीक्षा', counter: 'काउंटर',
+                waiting_msg: 'आपकी बारी का इंतजार हो रहा है...', refresh: 'रीफ्रेश करें', leave: 'कतार छोड़ें',
+                proc_status: 'खरीद स्थिति', quality_check: 'गुणवत्ता जांच', weight_measure: 'वजन माप',
+                proc_amount: 'खरीद राशि', pay_status: 'भुगतान स्थिति',
+                book_slot: 'अपना स्लॉट बुक करें', farmer_name: 'किसान का नाम', mobile: 'मोबाइल नंबर',
+                aadhaar: 'आधार नंबर', bank_acc: 'बैंक खाता संख्या', bank_acc_confirm: 'बैंक खाता संख्या की पुष्टि करें', centre: 'खरीद केंद्र',
+                crop_type: 'फसल का प्रकार', est_qty: 'अनुमानित मात्रा (किग्रा)', pref_date: 'पसंदीदा तारीख',
+                pref_slot: 'पसंदीदा समय स्लॉट', book_btn: 'स्लॉट बुक करें और टोकन पाएं',
+                slot_selected: 'चयनित स्लॉट', slot_timing: 'स्लॉट का समय', tokens_in_slot: 'स्लॉट में टोकन',
+                avg_process_time: 'औसत प्रक्रिया समय', est_wait_for_slot: 'इस स्लॉट के लिए अनुमानित प्रतीक्षा',
+                staff_login: 'स्टाफ लॉगिन', username: 'यूज़रनेम', password: 'पासवर्ड', login_btn: 'लॉगिन करें',
+                staff_dash: 'स्टाफ डैशबोर्ड', total_queue: 'कुल कतार में', avg_wait_time: 'औसत प्रतीक्षा समय',
+                served_tod: 'आज सेवा प्रदान की गई', ok_ratio: 'ऑनलाइन:कियोस्क अनुपात', proc_counters: 'खरीद काउंटर',
+                queue_list: 'कतार सूची', call_next: 'अगला बुलाएं', recall: 'फिर से बुलाएं', complete: 'पूर्ण',
+                quality: 'गुणवत्ता', weight: 'वजन', payment: 'भुगतान',
+                current: 'वर्तमान', farmer_label: 'किसान', crop_label: 'फसल', none: 'कोई नहीं', active_label: 'सक्रिय'
             }
         };
         let currentLang = 'en';
@@ -106,9 +143,9 @@
 
         // Slot configuration: tokens already booked per slot per date (simulated)
         const slotConfig = {
-            morning:   { label: 'Morning',   timing: '8:00 AM - 12:00 PM', startH: 8,  endH: 12, capacity: 80 },
-            afternoon: { label: 'Afternoon', timing: '12:00 PM - 4:00 PM', startH: 12, endH: 16, capacity: 80 },
-            evening:   { label: 'Evening',   timing: '4:00 PM - 8:00 PM',  startH: 16, endH: 20, capacity: 80 }
+            morning:   { label: 'Morning',   timing: '9:00 AM - 12:00 PM', startH: 9,  endH: 12, capacity: 80 },
+            afternoon: { label: 'Afternoon', timing: '2:00 PM - 5:00 PM',  startH: 14, endH: 17, capacity: 80 },
+            evening:   { label: 'Evening',   timing: '6:00 PM - 8:00 PM',  startH: 18, endH: 20, capacity: 80 }
         };
 
         // Simulated tokens already booked for today's slots
@@ -845,12 +882,43 @@
             }
         }
 
+        // ====== One active booking per farmer (by mobile OR Farmer ID) ======
+        function findActiveBookingConflict(mobile, farmerId) {
+            return queueData.find(q =>
+                (q.status === 'waiting' || q.status === 'serving') &&
+                ((mobile && q.mobile === mobile) || (farmerId && q.farmerId === farmerId))
+            );
+        }
+
+        // Hides the booking form entirely while the farmer already has a live token,
+        // and shows it again once they leave the queue (or their token clears).
+        function updateBookingFormVisibility() {
+            const active = currentToken ? queueData.find(q => q.token === currentToken && (q.status === 'waiting' || q.status === 'serving')) : null;
+            if (active) {
+                document.getElementById('bookingFormCard').style.display = 'none';
+                document.getElementById('activeBookingNotice').style.display = 'flex';
+                document.getElementById('activeBookingToken').textContent = active.token;
+            } else {
+                document.getElementById('bookingFormCard').style.display = '';
+                document.getElementById('activeBookingNotice').style.display = 'none';
+            }
+        }
+
         document.getElementById('joinQueueForm').addEventListener('submit', function(e) {
             e.preventDefault();
 
             if (!validateFarmerForm()) {
                 const firstInvalid = document.querySelector('#joinQueueForm .is-invalid');
                 if (firstInvalid) firstInvalid.focus({ preventScroll: false });
+                return;
+            }
+
+            // ---- Hard block: one active booking per farmer (by mobile OR Farmer ID) ----
+            const submittedMobile = document.getElementById('farmerMobile').value.trim();
+            const submittedFarmerId = document.getElementById('farmerId').value.trim();
+            const conflict = findActiveBookingConflict(submittedMobile, submittedFarmerId);
+            if (conflict) {
+                window.alert(`You already have an active booking — Token ${conflict.token}. Please complete or leave that queue before booking again.`);
                 return;
             }
 
@@ -902,11 +970,12 @@
                     type: 'online', crop: document.getElementById('cropType').value,
                     quantity: document.getElementById('estimatedQuantity').value,
                     status: 'waiting', counter: null,
-                    mobile: farmerMobile, slot: slotKey, date: dateStr
+                    mobile: farmerMobile, farmerId: document.getElementById('farmerId').value, slot: slotKey, date: dateStr
                 };
                 queueData.push(newToken);
                 renderHomeQueueStatus();
                 currentToken = token;
+                updateBookingFormVisibility();
 
                 // This booking just used up one of that slot's available ONLINE tokens —
                 // update Centre Capacity (admin) and Available Slots (home) together
@@ -985,6 +1054,7 @@
             document.getElementById('tokenStatus').style.display = 'none';
             document.getElementById('procurementStatus').style.display = 'none';
             currentToken = null;
+            updateBookingFormVisibility(); // booking form becomes available again
             showNotification('Left Queue', 'You have left the queue');
         }
 
@@ -1193,10 +1263,14 @@
         // (which don't ask the farmer to pick a slot) still count against the right pool.
         function getCurrentSlotKey() {
             const hour = new Date().getHours();
-            for (const [key, slot] of Object.entries(slotConfig)) {
+            const entries = Object.entries(slotConfig);
+            for (const [key, slot] of entries) {
                 if (hour >= slot.startH && hour < slot.endH) return key;
             }
-            return 'morning'; // outside business hours — default bucket
+            // In a gap between slots (lunch/break) or outside business hours,
+            // assign to whichever slot comes up next today; if the day is over, use the last slot.
+            const upcoming = entries.find(([, slot]) => hour < slot.startH);
+            return upcoming ? upcoming[0] : entries[entries.length - 1][0];
         }
 
         function renderCentreCapacityCard() {
@@ -1500,6 +1574,7 @@
                         q.mobile,
                         `AgriQueue: You missed your ${slot.label} slot for token ${q.token}. Please book a new slot to rejoin the queue.`
                     );
+                    if (q.token === currentToken) updateBookingFormVisibility(); // let them book again immediately
                 }
             });
         }
@@ -1518,6 +1593,7 @@
             updateAvailableTimeSlots();
             setInterval(updateAvailableTimeSlots, 60000); // re-check every minute so a slot disables itself the moment it ends
             setInterval(checkForNoShows, 60000); // same cadence — catch tokens whose slot just ended
+            updateBookingFormVisibility();
             AOS.init();
         }
         document.addEventListener('DOMContentLoaded', init);

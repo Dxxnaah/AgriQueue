@@ -32,6 +32,7 @@
                         <div class="lang-toggle">
                             <button class="lang-btn active" onclick="setLanguage('en')">EN</button>
                             <button class="lang-btn" onclick="setLanguage('ta')">தமிழ்</button>
+                            <button class="lang-btn" onclick="setLanguage('hi')">हिंदी</button>
                         </div>
                     </li>
                 </ul>
@@ -316,7 +317,13 @@
                         </div>
                     </div>
 
-                    <div class="card border-0 shadow-lg rounded-4 overflow-hidden">
+                    <!-- Shown instead of the booking form while the farmer already has an active token -->
+                    <div id="activeBookingNotice" class="alert alert-info rounded-4 shadow-sm" style="display:none; align-items:center; gap:0.5rem;">
+                        <i class="bi bi-info-circle-fill fs-4"></i>
+                        <div>You already have an active booking (<strong id="activeBookingToken">-</strong>). Leave that queue above if you'd like to book a new slot.</div>
+                    </div>
+
+                    <div class="card border-0 shadow-lg rounded-4 overflow-hidden" id="bookingFormCard">
                         <div class="card-body p-5">
                             <h2 class="text-center mb-4" data-i18n="book_slot">Book Your Slot</h2>
                             <form id="joinQueueForm" novalidate>
@@ -418,9 +425,9 @@
                                         <label class="form-label" data-i18n="pref_slot">Preferred Time Slot</label>
                                         <select class="form-select" id="timeSlot" required>
                                             <option value="">Select Slot</option>
-                                            <option value="morning" data-slot="morning">Morning (8:00 AM - 12:00 PM)</option>
-                                            <option value="afternoon" data-slot="afternoon">Afternoon (12:00 PM - 4:00 PM)</option>
-                                            <option value="evening" data-slot="evening">Evening (4:00 PM - 8:00 PM)</option>
+                                            <option value="morning" data-slot="morning">Morning (9:00 AM - 12:00 PM)</option>
+                                            <option value="afternoon" data-slot="afternoon">Afternoon (2:00 PM - 5:00 PM)</option>
+                                            <option value="evening" data-slot="evening">Evening (6:00 PM - 8:00 PM)</option>
                                         </select>
                                         <div class="invalid-feedback">Please select a preferred time slot.</div>
                                         <div class="form-text text-danger" id="timeSlotPastNotice" style="display:none;"></div>
@@ -729,17 +736,17 @@
                         <div class="card-header bg-white"><h5 class="mb-0">Centre Capacity</h5></div>
                         <div class="card-body">
                             <div class="mb-4">
-                                <div class="d-flex justify-content-between mb-1"><span>Morning Slot (8-12)</span><span id="capMorningPct">75%</span></div>
+                                <div class="d-flex justify-content-between mb-1"><span>Morning Slot (9-12)</span><span id="capMorningPct">75%</span></div>
                                 <div class="progress"><div class="progress-bar" id="capMorningBar" style="width: 75%"></div></div>
                                 <small class="text-muted" id="capMorningBooked">60/80 tokens booked</small>
                             </div>
                             <div class="mb-4">
-                                <div class="d-flex justify-content-between mb-1"><span>Afternoon Slot (12-4)</span><span id="capAfternoonPct">60%</span></div>
+                                <div class="d-flex justify-content-between mb-1"><span>Afternoon Slot (2-5)</span><span id="capAfternoonPct">60%</span></div>
                                 <div class="progress"><div class="progress-bar bg-warning" id="capAfternoonBar" style="width: 60%"></div></div>
                                 <small class="text-muted" id="capAfternoonBooked">48/80 tokens booked</small>
                             </div>
                             <div class="mb-2">
-                                <div class="d-flex justify-content-between mb-1"><span>Evening Slot (4-8)</span><span id="capEveningPct">40%</span></div>
+                                <div class="d-flex justify-content-between mb-1"><span>Evening Slot (6-8)</span><span id="capEveningPct">40%</span></div>
                                 <div class="progress"><div class="progress-bar bg-info" id="capEveningBar" style="width: 40%"></div></div>
                                 <small class="text-muted" id="capEveningBooked">32/80 tokens booked</small>
                             </div>
@@ -854,7 +861,7 @@
     <div class="modal fade" id="capacitySettingsModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h5 class="modal-title"><i class="bi bi-gear-fill me-2"></i>Edit Slot Capacity</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body">
         <p class="text-muted small">Set the maximum number of tokens each channel can accept per slot.</p>
 
-        <p class="fw-semibold mb-2">Morning Slot (8:00 AM - 12:00 PM)</p>
+        <p class="fw-semibold mb-2">Morning Slot (9:00 AM - 12:00 PM)</p>
         <div class="row g-2 mb-3">
             <div class="col-6">
                 <label class="form-label small">Online capacity</label>
@@ -868,7 +875,7 @@
             </div>
         </div>
 
-        <p class="fw-semibold mb-2">Afternoon Slot (12:00 PM - 4:00 PM)</p>
+        <p class="fw-semibold mb-2">Afternoon Slot (2:00 PM - 5:00 PM)</p>
         <div class="row g-2 mb-3">
             <div class="col-6">
                 <label class="form-label small">Online capacity</label>
@@ -882,7 +889,7 @@
             </div>
         </div>
 
-        <p class="fw-semibold mb-2">Evening Slot (4:00 PM - 8:00 PM)</p>
+        <p class="fw-semibold mb-2">Evening Slot (6:00 PM - 8:00 PM)</p>
         <div class="row g-2 mb-3">
             <div class="col-6">
                 <label class="form-label small">Online capacity</label>
